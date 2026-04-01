@@ -1,0 +1,6 @@
+streamlit
+openai-whisper
+ffmpeg-python
+faiss-cpu
+sentence-transformers
+numpy

@@ -1,0 +1,8 @@
+{
+  "stack": "python",
+  "project_type": "greenfield",
+  "llm": "opencode",
+  "runtime": "local",
+  "database": "unknown",
+  "detected_at": "2026-04-01T16:35:07-03:00"
+}
