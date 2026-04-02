@@ -1,3 +1,7 @@
+import warnings
+
+warnings.filterwarnings("ignore", message="Accessing `__path__`")
+
 import streamlit as st
 import whisper
 import tempfile
@@ -5,8 +9,13 @@ import os
 import time
 from pathlib import Path
 from lib.model_manager import (
-    get_model_info, is_model_downloaded, load_model_with_check,
-    download_model, delete_model, get_model_size_on_disk, MODEL_SIZES_MB,
+    get_model_info,
+    is_model_downloaded,
+    load_model_with_check,
+    download_model,
+    delete_model,
+    get_model_size_on_disk,
+    MODEL_SIZES_MB,
 )
 from lib.queue_manager import QueueManager, JobStatus
 from lib.embeddings import EmbeddingsManager
@@ -19,29 +28,17 @@ queue = QueueManager("transcripts")
 embeddings_mgr = EmbeddingsManager()
 
 
-def load_model_cached(model_name, device="cpu"):
-    if "current_model" not in st.session_state:
-        st.session_state.current_model = None
-        st.session_state.model_obj = None
-
-    if st.session_state.current_model != model_name:
-        with st.spinner(f"Carregando modelo {model_name}..."):
-            st.session_state.model_obj = load_model_with_check(model_name, device)
-            st.session_state.current_model = model_name
-
-    return st.session_state.model_obj
-
-
 def process_audio(job_id, file_path, model_name):
     try:
         queue.update_status(job_id, JobStatus.PROCESSING.value)
-        model = load_model_cached(model_name)
+        with st.spinner(f"Transcrevendo com {model_name}..."):
+            model = load_model_with_check(model_name)
 
-        result = model.transcribe(file_path, language="pt")
-        text = result["text"]
+            result = model.transcribe(file_path, language="pt")
+            text = result["text"]
 
-        text_path = queue.save_transcription(job_id, text)
-        return text, text_path
+            text_path = queue.save_transcription(job_id, text)
+            return text, text_path
     except Exception as e:
         queue.update_status(job_id, JobStatus.ERROR.value, error=str(e))
         raise e
@@ -139,7 +136,9 @@ def main():
                     if st.session_state.get(confirm_key):
                         c1, c2 = st.columns(2)
                         with c1:
-                            if st.button("Confirmar exclusão", key=f"confirm_yes_{job['id']}"):
+                            if st.button(
+                                "Confirmar exclusão", key=f"confirm_yes_{job['id']}"
+                            ):
                                 queue.delete_job(job["id"])
                                 st.session_state.pop(confirm_key, None)
                                 st.rerun()
@@ -173,7 +172,9 @@ def main():
                                     st.error(f"Erro: {e}")
                                 st.rerun()
                             else:
-                                st.warning("Arquivo original não encontrado. Faça o upload novamente.")
+                                st.warning(
+                                    "Arquivo original não encontrado. Faça o upload novamente."
+                                )
 
                     if job.get("transcription"):
                         st.text_area(
@@ -270,7 +271,9 @@ def main():
 
         ollama_models = get_ollama_models()
         if not ollama_models:
-            st.error("Nenhum modelo disponível no Ollama. Execute `ollama pull <modelo>`.")
+            st.error(
+                "Nenhum modelo disponível no Ollama. Execute `ollama pull <modelo>`."
+            )
             st.stop()
 
         col_model, col_clear = st.columns([3, 1])
@@ -289,15 +292,21 @@ def main():
 
         embedded_count = len(embeddings_mgr.get_all_embedded())
         if embedded_count > 0:
-            st.caption(f"📚 {embedded_count} chunks vetorizados disponíveis como contexto")
+            st.caption(
+                f"📚 {embedded_count} chunks vetorizados disponíveis como contexto"
+            )
         else:
-            st.caption("💡 Sem conteúdo vetorizado — o assistente responderá com conhecimento geral")
+            st.caption(
+                "💡 Sem conteúdo vetorizado — o assistente responderá com conhecimento geral"
+            )
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
         messages_container = st.container()
-        query = st.chat_input("Pergunte sobre o conteúdo ou qualquer dúvida de estudo...")
+        query = st.chat_input(
+            "Pergunte sobre o conteúdo ou qualquer dúvida de estudo..."
+        )
 
         with messages_container:
             for msg in st.session_state.messages:
@@ -309,17 +318,24 @@ def main():
                 with st.chat_message("user"):
                     st.markdown(query)
 
-                context_chunks = embeddings_mgr.search(query, top_k=5) if embedded_count > 0 else []
+                context_chunks = (
+                    embeddings_mgr.search(query, top_k=5) if embedded_count > 0 else []
+                )
 
                 with st.chat_message("assistant"):
                     try:
                         response = st.write_stream(
-                            stream_chat(st.session_state.messages[:-1], context_chunks, chat_model)
+                            stream_chat(
+                                st.session_state.messages[:-1],
+                                context_chunks,
+                                chat_model,
+                            )
                         )
-                        st.session_state.messages.append({"role": "assistant", "content": response})
+                        st.session_state.messages.append(
+                            {"role": "assistant", "content": response}
+                        )
                     except Exception as e:
                         st.error(f"Erro ao chamar o modelo: {e}")
-
 
     with tab4:
         st.subheader("Gerenciamento de Modelos Whisper")

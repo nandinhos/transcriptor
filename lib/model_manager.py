@@ -7,24 +7,26 @@ HOME_DIR = os.path.expanduser("~")
 MODEL_CACHE_DIR = Path(HOME_DIR) / ".cache" / "whisper"
 AVAILABLE_MODELS = ["tiny", "base", "small", "medium", "large", "turbo"]
 
+MODEL_CACHE = {}
+
 # Nome real do arquivo no cache do whisper por modelo
 MODEL_FILENAMES = {
-    "tiny":   "tiny.pt",
-    "base":   "base.pt",
-    "small":  "small.pt",
+    "tiny": "tiny.pt",
+    "base": "base.pt",
+    "small": "small.pt",
     "medium": "medium.pt",
-    "large":  "large.pt",
-    "turbo":  "large-v3-turbo.pt",
+    "large": "large.pt",
+    "turbo": "large-v3-turbo.pt",
 }
 
 # Tamanhos aproximados em MB
 MODEL_SIZES_MB = {
-    "tiny":   75,
-    "base":   145,
-    "small":  465,
+    "tiny": 75,
+    "base": 145,
+    "small": 465,
     "medium": 1500,
-    "large":  2900,
-    "turbo":  1600,
+    "large": 2900,
+    "turbo": 1600,
 }
 
 
@@ -58,7 +60,14 @@ def delete_model(model_name: str):
 
 
 def load_model_with_check(model_name: str, device: str = "cpu"):
-    return whisper.load_model(model_name, device=device)
+    if model_name not in MODEL_CACHE:
+        MODEL_CACHE[model_name] = whisper.load_model(model_name, device=device)
+    return MODEL_CACHE[model_name]
+
+
+def clear_model_cache():
+    global MODEL_CACHE
+    MODEL_CACHE.clear()
 
 
 def get_model_info() -> dict:
