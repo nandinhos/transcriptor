@@ -10,6 +10,7 @@ from lib.model_manager import (
 )
 from lib.queue_manager import QueueManager, JobStatus
 from lib.embeddings import EmbeddingsManager
+from lib.chat import get_ollama_models, is_ollama_running, stream_chat
 
 st.set_page_config(page_title="Transcritor Pro", page_icon="🎙️", layout="wide")
 
@@ -262,55 +263,60 @@ def main():
 
     with tab3:
         st.subheader("💬 Chat de Estudos")
-        st.markdown("Faça perguntas sobre o conteúdo transcrito e vetorizado")
 
-        embedded_count = len(embeddings_mgr.get_all_embedded())
-        st.write(f"📚 {embedded_count} chunks vetorizados")
+        if not is_ollama_running():
+            st.error("Ollama não está rodando. Inicie com `ollama serve` no terminal.")
+            st.stop()
 
-        if embedded_count > 0:
-            if "messages" not in st.session_state:
-                st.session_state.messages = []
+        ollama_models = get_ollama_models()
+        if not ollama_models:
+            st.error("Nenhum modelo disponível no Ollama. Execute `ollama pull <modelo>`.")
+            st.stop()
 
-            for msg in st.session_state.messages:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-
-            query = st.chat_input("Digite sua pergunta sobre o conteúdo...")
-
-            if query:
-                st.session_state.messages.append({"role": "user", "content": query})
-                with st.chat_message("user"):
-                    st.markdown(query)
-
-                with st.chat_message("assistant"):
-                    with st.spinner("Buscando informações..."):
-                        results = embeddings_mgr.search(query, top_k=5)
-
-                    if results:
-                        response = "Encontrei as seguintes informações:\n\n"
-                        for r in results:
-                            response += f"📄 **{r['filename']}**:\n{r['text']}\n\n"
-
-                        st.markdown(response)
-                        st.session_state.messages.append(
-                            {"role": "assistant", "content": response}
-                        )
-                    else:
-                        st.warning("Não encontrei informações relevantes")
-                        st.session_state.messages.append(
-                            {
-                                "role": "assistant",
-                                "content": "Não encontrei informações relevantes nos documentos.",
-                            }
-                        )
-
-            if st.button("🗑️ Limpar Chat"):
+        col_model, col_clear = st.columns([3, 1])
+        with col_model:
+            default_idx = next(
+                (i for i, m in enumerate(ollama_models) if "minimax" in m.lower()), 0
+            )
+            chat_model = st.selectbox(
+                "Modelo", ollama_models, index=default_idx, key="chat_model"
+            )
+        with col_clear:
+            st.write("")
+            if st.button("🗑️ Limpar chat"):
                 st.session_state.messages = []
                 st.rerun()
+
+        embedded_count = len(embeddings_mgr.get_all_embedded())
+        if embedded_count > 0:
+            st.caption(f"📚 {embedded_count} chunks vetorizados disponíveis como contexto")
         else:
-            st.warning(
-                "Nenhum conteúdo vetorizado ainda. Valide uma transcrição e gere embeddings primeiro."
-            )
+            st.caption("💡 Sem conteúdo vetorizado — o assistente responderá com conhecimento geral")
+
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        query = st.chat_input("Pergunte sobre o conteúdo ou qualquer dúvida de estudo...")
+
+        if query:
+            st.session_state.messages.append({"role": "user", "content": query})
+            with st.chat_message("user"):
+                st.markdown(query)
+
+            context_chunks = embeddings_mgr.search(query, top_k=5) if embedded_count > 0 else []
+
+            with st.chat_message("assistant"):
+                try:
+                    response = st.write_stream(
+                        stream_chat(st.session_state.messages[:-1], context_chunks, chat_model)
+                    )
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                except Exception as e:
+                    st.error(f"Erro ao chamar o modelo: {e}")
 
 
     with tab4:
