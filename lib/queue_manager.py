@@ -132,6 +132,27 @@ class QueueManager:
     def mark_embedded(self, job_id: str):
         self.update_status(job_id, JobStatus.EMBEDDED.value, embedded=True)
 
+    def delete_job(self, job_id: str):
+        queue = self._load_queue()
+        job = next((j for j in queue if j["id"] == job_id), None)
+        if job:
+            file_path = job.get("file_path")
+            if file_path and Path(file_path).exists():
+                Path(file_path).unlink()
+        self._save_queue([j for j in queue if j["id"] != job_id])
+
+    def clear_unexecuted(self):
+        queue = self._load_queue()
+        removable = [
+            j for j in queue
+            if j["status"] in (JobStatus.PENDING.value, JobStatus.ERROR.value)
+        ]
+        for job in removable:
+            file_path = job.get("file_path")
+            if file_path and Path(file_path).exists():
+                Path(file_path).unlink()
+        self._save_queue([j for j in queue if j not in removable])
+
     def reset_for_retry(self, job_id: str, model: str):
         queue = self._load_queue()
         for job in queue:

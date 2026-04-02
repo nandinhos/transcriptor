@@ -109,6 +109,12 @@ def main():
         queue_data = queue.get_queue()
 
         if queue_data:
+            unexecuted = [j for j in queue_data if j["status"] in ("pendente", "erro")]
+            if unexecuted:
+                if st.button(f"🗑️ Limpar não executados ({len(unexecuted)})"):
+                    queue.clear_unexecuted()
+                    st.rerun()
+
             for job in queue_data:
                 status_emoji = {
                     "pendente": "⏳",
@@ -124,6 +130,23 @@ def main():
                     st.write(f"**Modelo:** {job['model']}")
                     st.write(f"**Tamanho:** {job['file_size'] / (1024 * 1024):.1f} MB")
                     st.write(f"**Criado:** {job['created_at']}")
+
+                    confirm_key = f"confirm_delete_{job['id']}"
+                    if st.session_state.get(confirm_key):
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("Confirmar exclusão", key=f"confirm_yes_{job['id']}"):
+                                queue.delete_job(job["id"])
+                                st.session_state.pop(confirm_key, None)
+                                st.rerun()
+                        with c2:
+                            if st.button("Cancelar", key=f"confirm_no_{job['id']}"):
+                                st.session_state.pop(confirm_key, None)
+                                st.rerun()
+                    else:
+                        if st.button("🗑️ Excluir", key=f"delete_{job['id']}"):
+                            st.session_state[confirm_key] = True
+                            st.rerun()
 
                     if job["status"] == "erro":
                         st.error(f"Erro: {job.get('error', 'desconhecido')}")
