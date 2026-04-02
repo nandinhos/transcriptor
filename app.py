@@ -4,7 +4,10 @@ import tempfile
 import os
 import time
 from pathlib import Path
-from lib.model_manager import get_model_info, is_model_downloaded, load_model_with_check
+from lib.model_manager import (
+    get_model_info, is_model_downloaded, load_model_with_check,
+    download_model, delete_model, get_model_size_on_disk, MODEL_SIZES_MB,
+)
 from lib.queue_manager import QueueManager, JobStatus
 from lib.embeddings import EmbeddingsManager
 
@@ -47,8 +50,8 @@ def main():
     st.title("🎙️ Transcritor Pro")
     st.markdown("Transcrição de áudio com fila de execução e chat de estudos")
 
-    tab1, tab2, tab3 = st.tabs(
-        ["📤 Upload & Fila", "📝 Validação", "💬 Chat de Estudos"]
+    tab1, tab2, tab3, tab4 = st.tabs(
+        ["📤 Upload & Fila", "📝 Validação", "💬 Chat de Estudos", "⚙️ Modelos"]
     )
 
     with tab1:
@@ -308,6 +311,66 @@ def main():
             st.warning(
                 "Nenhum conteúdo vetorizado ainda. Valide uma transcrição e gere embeddings primeiro."
             )
+
+
+    with tab4:
+        st.subheader("Gerenciamento de Modelos Whisper")
+
+        active_model = st.session_state.get("current_model")
+
+        for model_name in model_info["available"]:
+            downloaded = is_model_downloaded(model_name)
+            size_mb = MODEL_SIZES_MB.get(model_name, 0)
+            is_active = active_model == model_name
+
+            col_name, col_size, col_status, col_action = st.columns([2, 1, 1, 2])
+
+            with col_name:
+                st.write(f"**{model_name}**")
+            with col_size:
+                if downloaded:
+                    real_mb = get_model_size_on_disk(model_name) / (1024 * 1024)
+                    st.write(f"{real_mb:.0f} MB")
+                else:
+                    st.write(f"~{size_mb} MB")
+            with col_status:
+                if is_active:
+                    st.success("em uso")
+                elif downloaded:
+                    st.info("baixado")
+                else:
+                    st.caption("não baixado")
+            with col_action:
+                if not downloaded:
+                    if st.button("⬇️ Baixar", key=f"dl_{model_name}"):
+                        with st.spinner(f"Baixando {model_name}..."):
+                            try:
+                                download_model(model_name)
+                                st.success(f"{model_name} baixado!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro: {e}")
+                elif is_active:
+                    st.button("🔒 Em uso", key=f"inuse_{model_name}", disabled=True)
+                else:
+                    confirm_key = f"confirm_del_model_{model_name}"
+                    if st.session_state.get(confirm_key):
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("Confirmar", key=f"del_yes_{model_name}"):
+                                delete_model(model_name)
+                                st.session_state.pop(confirm_key, None)
+                                st.rerun()
+                        with c2:
+                            if st.button("Cancelar", key=f"del_no_{model_name}"):
+                                st.session_state.pop(confirm_key, None)
+                                st.rerun()
+                    else:
+                        if st.button("🗑️ Excluir", key=f"del_{model_name}"):
+                            st.session_state[confirm_key] = True
+                            st.rerun()
+
+            st.divider()
 
 
 if __name__ == "__main__":
