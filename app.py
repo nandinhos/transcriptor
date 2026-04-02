@@ -296,27 +296,29 @@ def main():
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
+        messages_container = st.container()
         query = st.chat_input("Pergunte sobre o conteúdo ou qualquer dúvida de estudo...")
 
-        if query:
-            st.session_state.messages.append({"role": "user", "content": query})
-            with st.chat_message("user"):
-                st.markdown(query)
+        with messages_container:
+            for msg in st.session_state.messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
 
-            context_chunks = embeddings_mgr.search(query, top_k=5) if embedded_count > 0 else []
+            if query:
+                st.session_state.messages.append({"role": "user", "content": query})
+                with st.chat_message("user"):
+                    st.markdown(query)
 
-            with st.chat_message("assistant"):
-                try:
-                    response = st.write_stream(
-                        stream_chat(st.session_state.messages[:-1], context_chunks, chat_model)
-                    )
-                    st.session_state.messages.append({"role": "assistant", "content": response})
-                except Exception as e:
-                    st.error(f"Erro ao chamar o modelo: {e}")
+                context_chunks = embeddings_mgr.search(query, top_k=5) if embedded_count > 0 else []
+
+                with st.chat_message("assistant"):
+                    try:
+                        response = st.write_stream(
+                            stream_chat(st.session_state.messages[:-1], context_chunks, chat_model)
+                        )
+                        st.session_state.messages.append({"role": "assistant", "content": response})
+                    except Exception as e:
+                        st.error(f"Erro ao chamar o modelo: {e}")
 
 
     with tab4:
