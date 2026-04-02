@@ -2,8 +2,10 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
-.streamlit/
 transcripts/
 *.log
 .env
 .DS_Store
+
+# DEVORQ — estado de runtime (não é código-fonte)
+.devorq/state/

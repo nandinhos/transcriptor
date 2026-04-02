@@ -2,7 +2,7 @@
 
 ## Contexto
 - Tipo: Sistema novo
-- Stack: generic
+- Stack: python
 - Regra: Arquitetura primeiro, código depois
 
 ## Regras de Ouro
