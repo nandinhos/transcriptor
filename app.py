@@ -10,19 +10,6 @@ from lib.embeddings import EmbeddingsManager
 
 st.set_page_config(page_title="Transcritor Pro", page_icon="🎙️", layout="wide")
 
-st.markdown(
-    """
-    <style>
-        .stFileUploader [data-testid="stFileUploader"] {
-            max-upload-size-mb: 2000;
-        }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
-
-# Configurar limite de upload para 2GB
-MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
 
 queue = QueueManager("transcripts")
 embeddings_mgr = EmbeddingsManager()
@@ -73,7 +60,6 @@ def main():
                 "Selecione arquivos de áudio/vídeo (máx 2GB por arquivo)",
                 type=["mp4", "mp3", "wav", "m4a", "ogg", "flac", "avi", "mkv"],
                 accept_multiple_files=True,
-                max_upload_size=2000,
             )
 
         with col2:
@@ -104,21 +90,19 @@ def main():
                     job_id = queue.add_job(
                         uploaded_file.name, uploaded_file.size, selected_model
                     )
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=Path(uploaded_file.name).suffix
-                    ) as tmp:
-                        tmp.write(uploaded_file.getvalue())
-                        tmp_path = tmp.name
+                    file_ext = Path(uploaded_file.name).suffix
+                    stored_path = str(queue.storage_path / f"{job_id}_source{file_ext}")
+                    with open(stored_path, "wb") as f:
+                        f.write(uploaded_file.getvalue())
+                    queue.update_status(job_id, "pendente", file_path=stored_path)
 
                     try:
                         text, text_path = process_audio(
-                            job_id, tmp_path, selected_model
+                            job_id, stored_path, selected_model
                         )
                         st.success(f"Job {job_id}: Transcrição concluída!")
                     except Exception as e:
                         st.error(f"Erro: {e}")
-                    finally:
-                        os.unlink(tmp_path)
 
         st.divider()
         st.subheader("Fila de Execução")
@@ -140,6 +124,30 @@ def main():
                     st.write(f"**Modelo:** {job['model']}")
                     st.write(f"**Tamanho:** {job['file_size'] / (1024 * 1024):.1f} MB")
                     st.write(f"**Criado:** {job['created_at']}")
+
+                    if job["status"] == "erro":
+                        st.error(f"Erro: {job.get('error', 'desconhecido')}")
+                        retry_model = st.selectbox(
+                            "Modelo para retry",
+                            model_info["available"],
+                            index=model_info["available"].index(job["model"])
+                            if job["model"] in model_info["available"]
+                            else 2,
+                            key=f"retry_model_{job['id']}",
+                        )
+                        if st.button("🔄 Tentar novamente", key=f"retry_{job['id']}"):
+                            stored = job.get("file_path")
+                            if stored and Path(stored).exists():
+                                queue.reset_for_retry(job["id"], retry_model)
+                                try:
+                                    process_audio(job["id"], stored, retry_model)
+                                    st.success("Transcrição concluída!")
+                                except Exception as e:
+                                    st.error(f"Erro: {e}")
+                                st.rerun()
+                            else:
+                                st.warning("Arquivo original não encontrado. Faça o upload novamente.")
+
                     if job.get("transcription"):
                         st.text_area(
                             "Transcrição",

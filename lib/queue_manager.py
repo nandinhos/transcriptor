@@ -38,7 +38,7 @@ class QueueManager:
         with open(self.queue_file, "w") as f:
             json.dump(queue, f, indent=2, default=str)
 
-    def add_job(self, filename: str, file_size: int, model: str = "small") -> str:
+    def add_job(self, filename: str, file_size: int, model: str = "small", file_path: str = None) -> str:
         job_id = str(uuid.uuid4())[:8]
         job = {
             "id": job_id,
@@ -52,6 +52,7 @@ class QueueManager:
             "error": None,
             "transcription": None,
             "text_path": None,
+            "file_path": file_path,
             "embedded": False,
         }
         queue = self._load_queue()
@@ -130,3 +131,17 @@ class QueueManager:
 
     def mark_embedded(self, job_id: str):
         self.update_status(job_id, JobStatus.EMBEDDED.value, embedded=True)
+
+    def reset_for_retry(self, job_id: str, model: str):
+        queue = self._load_queue()
+        for job in queue:
+            if job["id"] == job_id:
+                job["status"] = JobStatus.PENDING.value
+                job["model"] = model
+                job["error"] = None
+                job["transcription"] = None
+                job["text_path"] = None
+                job["started_at"] = None
+                job["completed_at"] = None
+                break
+        self._save_queue(queue)
